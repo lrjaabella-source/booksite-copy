@@ -43,6 +43,13 @@ let authenticatedUser = null;
 
 function setAuthenticatedUser(user) {
   authenticatedUser = user;
+  const accountName = user?.name?.trim();
+  if (accountName && (!profile.name || profile.name === "Reader")) {
+    profile.name = accountName;
+    saveProfile();
+    renderProfile();
+  }
+  if (!accountButton) return;
   accountButton.textContent = user ? "Log out" : "Log in";
   accountButton.setAttribute("aria-label", user ? `Log out ${user.name}` : "Log in");
   accountButton.title = user ? `Signed in as ${user.email}` : "Log in or create an account";
@@ -51,18 +58,19 @@ function setAuthenticatedUser(user) {
 function setAuthMode(mode) {
   authMode = mode;
   const isRegistering = mode === "register";
-  authTitle.textContent = isRegistering ? "Create account" : "Log in";
-  authSubmitButton.textContent = isRegistering ? "Create account" : "Log in";
-  authNameGroup.hidden = !isRegistering;
-  authNameInput.required = isRegistering;
-  authNameInput.autocomplete = isRegistering ? "name" : "off";
-  authPasswordInput.autocomplete = isRegistering ? "new-password" : "current-password";
-  authSwitchPrompt.textContent = isRegistering ? "Already have an account?" : "Need an account?";
-  authSwitchButton.textContent = isRegistering ? "Log in" : "Create one";
-  authStatus.textContent = "";
+  if (authTitle) authTitle.textContent = isRegistering ? "Create account" : "Log in";
+  if (authSubmitButton) authSubmitButton.textContent = isRegistering ? "Create account" : "Log in";
+  if (authNameGroup) authNameGroup.hidden = !isRegistering;
+  if (authNameInput) authNameInput.required = isRegistering;
+  if (authNameInput) authNameInput.autocomplete = isRegistering ? "name" : "off";
+  if (authPasswordInput) authPasswordInput.autocomplete = isRegistering ? "new-password" : "current-password";
+  if (authSwitchPrompt) authSwitchPrompt.textContent = isRegistering ? "Already have an account?" : "Need an account?";
+  if (authSwitchButton) authSwitchButton.textContent = isRegistering ? "Log in" : "Create one";
+  if (authStatus) authStatus.textContent = "";
 }
 
 function openAuthDialog() {
+  if (!authOverlay || !authEmailInput) return;
   setAuthMode("login");
   authOverlay.classList.remove("invisible-page");
   authOverlay.classList.add("visible-page");
@@ -71,10 +79,11 @@ function openAuthDialog() {
 }
 
 function closeAuthDialog() {
+  if (!authOverlay) return;
   authOverlay.classList.remove("visible-page");
   authOverlay.classList.add("invisible-page");
   document.body.style.overflow = "";
-  accountButton.focus();
+  accountButton?.focus();
 }
 
 async function loadAuthState() {
@@ -88,6 +97,11 @@ async function loadAuthState() {
 }
 
 async function logOut() {
+  if (!accountButton) {
+    setAuthenticatedUser(null);
+    return;
+  }
+
   accountButton.disabled = true;
   try {
     const response = await fetch("/api/auth/logout", { method: "POST" });
@@ -100,61 +114,73 @@ async function logOut() {
   }
 }
 
-accountButton.addEventListener("click", () => {
-  if (authenticatedUser) logOut();
-  else openAuthDialog();
-});
+if (accountButton) {
+  accountButton.addEventListener("click", () => {
+    if (authenticatedUser) logOut();
+    else openAuthDialog();
+  });
+}
 
-document.querySelector("#close-auth-btn").addEventListener("click", closeAuthDialog);
-authSwitchButton.addEventListener("click", () => {
-  setAuthMode(authMode === "login" ? "register" : "login");
-});
+const closeAuthButton = document.querySelector("#close-auth-btn");
+if (closeAuthButton) {
+  closeAuthButton.addEventListener("click", closeAuthDialog);
+}
 
-authOverlay.addEventListener("click", event => {
-  if (event.target === authOverlay) closeAuthDialog();
-});
+if (authSwitchButton) {
+  authSwitchButton.addEventListener("click", () => {
+    setAuthMode(authMode === "login" ? "register" : "login");
+  });
+}
+
+if (authOverlay) {
+  authOverlay.addEventListener("click", event => {
+    if (event.target === authOverlay) closeAuthDialog();
+  });
+}
 
 document.addEventListener("keydown", event => {
-  if (event.key === "Escape" && authOverlay.classList.contains("visible-page")) {
+  if (authOverlay && event.key === "Escape" && authOverlay.classList.contains("visible-page")) {
     closeAuthDialog();
   }
 });
 
-authForm.addEventListener("submit", async event => {
-  event.preventDefault();
-  authStatus.textContent = authMode === "register" ? "Creating your account…" : "Logging in…";
-  authSubmitButton.disabled = true;
+if (authForm) {
+  authForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (authStatus) authStatus.textContent = authMode === "register" ? "Creating your account…" : "Logging in…";
+    if (authSubmitButton) authSubmitButton.disabled = true;
 
-  const payload = {
-    email: authEmailInput.value,
-    password: authPasswordInput.value
-  };
-  if (authMode === "register") payload.name = authNameInput.value;
+    const payload = {
+      email: authEmailInput ? authEmailInput.value : "",
+      password: authPasswordInput ? authPasswordInput.value : ""
+    };
+    if (authMode === "register" && authNameInput) payload.name = authNameInput.value;
 
-  try {
-    const response = await fetch(`/api/auth/${authMode}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const contentType = response.headers.get("content-type") || "";
-    if (!contentType.includes("application/json")) {
-      const isGitHubPages = location.hostname.endsWith(".github.io");
-      throw new Error(isGitHubPages
-        ? "Sign-in is unavailable on GitHub Pages because it only hosts the frontend. The Express backend must be deployed separately to enable accounts here."
-        : "The account API was not found. Restart the Express server with npm start, then open http://localhost:3000.");
+    try {
+      const response = await fetch(`/api/auth/${authMode}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const isGitHubPages = location.hostname.endsWith(".github.io");
+        throw new Error(isGitHubPages
+          ? "Sign-in is unavailable on GitHub Pages because it only hosts the frontend. The Express backend must be deployed separately to enable accounts here."
+          : "The account API was not found. Restart the Express server with npm start, then open http://localhost:3000.");
+      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Authentication failed.");
+      setAuthenticatedUser(data.user);
+      authForm.reset();
+      closeAuthDialog();
+    } catch (error) {
+      if (authStatus) authStatus.textContent = error.message || "Could not connect to the account service.";
+    } finally {
+      if (authSubmitButton) authSubmitButton.disabled = false;
     }
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Authentication failed.");
-    setAuthenticatedUser(data.user);
-    authForm.reset();
-    closeAuthDialog();
-  } catch (error) {
-    authStatus.textContent = error.message || "Could not connect to the account service.";
-  } finally {
-    authSubmitButton.disabled = false;
-  }
-});
+  });
+}
 
 const profileSection =
   document.querySelector("#profile");
@@ -188,6 +214,15 @@ const profileAgeInput =
 
 const profileDescriptionInput =
   document.querySelector("#profile-description");
+
+const profilePhotoInput = document.querySelector("#profile-photo");
+const profilePhotoPreview = document.querySelector("#profile-photo-preview");
+const profilePhotoStatus = document.querySelector("#profile-photo-status");
+const removeProfilePhotoButton = document.querySelector("#remove-profile-photo");
+const profileAvatarImage = document.querySelector(".profile-avatar img");
+const topbarProfileImage = document.querySelector("#profile-btn .user-icon");
+let pendingProfileAvatar = null;
+const DEFAULT_AVATAR = "./resources/user.png";
 
 const PROFILE_STORAGE_KEY =
   "myBookReaderProfile";
@@ -282,6 +317,12 @@ function renderProfile() {
   profileDisplayDescription.textContent =
     profile.description ||
     "Tell us a little about yourself.";
+
+  const avatar = profile.avatar || DEFAULT_AVATAR;
+  if (profileAvatarImage) profileAvatarImage.src = avatar;
+  if (topbarProfileImage) topbarProfileImage.src = avatar;
+  if (profilePhotoPreview) profilePhotoPreview.src = avatar;
+  document.querySelector(".profile-avatar")?.classList.toggle("has-photo", Boolean(profile.avatar));
 }
 
 
@@ -328,6 +369,11 @@ if (editProfileButton) {
       profileDescriptionInput.value =
         profile.description || "";
 
+      pendingProfileAvatar = null;
+      if (profilePhotoInput) profilePhotoInput.value = "";
+      if (profilePhotoStatus) profilePhotoStatus.textContent = "";
+      if (profilePhotoPreview) profilePhotoPreview.src = profile.avatar || DEFAULT_AVATAR;
+
       profileEditCard.classList.remove(
         "invisible-page"
       );
@@ -362,9 +408,53 @@ if (cancelProfileButton) {
         "invisible-page"
       );
 
+      pendingProfileAvatar = null;
+      if (profilePhotoInput) profilePhotoInput.value = "";
+      if (profilePhotoStatus) profilePhotoStatus.textContent = "";
+      if (profilePhotoPreview) profilePhotoPreview.src = profile.avatar || DEFAULT_AVATAR;
+
     }
   );
 
+}
+
+if (profilePhotoInput) {
+  profilePhotoInput.addEventListener("change", () => {
+    const file = profilePhotoInput.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      profilePhotoStatus.textContent = "Choose an image file.";
+      profilePhotoInput.value = "";
+      return;
+    }
+
+    if (file.size > 1024 * 1024) {
+      profilePhotoStatus.textContent = "Image must be 1 MB or smaller.";
+      profilePhotoInput.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      pendingProfileAvatar = String(reader.result);
+      profilePhotoPreview.src = pendingProfileAvatar;
+      profilePhotoStatus.textContent = "";
+    });
+    reader.addEventListener("error", () => {
+      profilePhotoStatus.textContent = "Could not read this image.";
+    });
+    reader.readAsDataURL(file);
+  });
+}
+
+if (removeProfilePhotoButton) {
+  removeProfilePhotoButton.addEventListener("click", () => {
+    pendingProfileAvatar = "";
+    if (profilePhotoInput) profilePhotoInput.value = "";
+    if (profilePhotoPreview) profilePhotoPreview.src = DEFAULT_AVATAR;
+    if (profilePhotoStatus) profilePhotoStatus.textContent = "";
+  });
 }
 
 
@@ -390,9 +480,18 @@ if (profileForm) {
           profileAgeInput.value.trim(),
 
         description:
-          profileDescriptionInput.value.trim()
+          profileDescriptionInput.value.trim(),
+
+        avatar:
+          pendingProfileAvatar === null
+            ? profile.avatar || ""
+            : pendingProfileAvatar
 
       };
+
+      pendingProfileAvatar = null;
+      if (profilePhotoInput) profilePhotoInput.value = "";
+      if (profilePhotoStatus) profilePhotoStatus.textContent = "";
 
       saveProfile();
 
@@ -661,7 +760,7 @@ const defaultBooks = [
     author: "Tara Westover",
     genre: "Memoir",
     pages: 352,
-    currentPage: 245,
+    currentPage:245,
     cover: "https://covers.openlibrary.org/b/isbn/9780399590504-L.jpg",
     description: "A memoir about education, family, identity, and finding independence.",
     status: "current",
@@ -844,10 +943,7 @@ function loadBooks() {
 
       // Accept all saved books, not just sample books.
       if (Array.isArray(parsedBooks)) {
-        const normalizedBooks = deduplicateBooks(parsedBooks.map(normalizeBookProgress));
-        // Clean up duplicates created by older versions of the app.
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedBooks));
-        return normalizedBooks;
+        return parsedBooks.map(normalizeBookProgress);
       }
     } catch (error) {
       console.error("Could not load saved books:", error);
@@ -855,9 +951,12 @@ function loadBooks() {
   }
 
   // First launch: initialize with sample books.
-  const initialBooks = deduplicateBooks(
-    structuredClone(defaultBooks).map(normalizeBookProgress)
-  );
+const initialBooks = structuredClone(defaultBooks).map(normalizeBookProgress).map(book => ({
+      ...book,
+      createdAt: book.createdAt || new Date().toISOString(),
+      rating: book.rating || 0,
+      review: book.review || ""
+    }));
 
   localStorage.setItem(
     STORAGE_KEY,
@@ -865,28 +964,6 @@ function loadBooks() {
   );
 
   return initialBooks;
-}
-
-function deduplicateBooks(bookList) {
-  const seen = new Set();
-  return bookList.filter(book => {
-    const title = String(book.title || "").trim().toLocaleLowerCase();
-    const author = String(book.author || "").trim().toLocaleLowerCase();
-    const description = String(book.description || "").trim().toLocaleLowerCase();
-
-    // Remove the accidental test entry: Life / Life adventure / 124 pages.
-    if (
-      Number(book.pages) === 124 &&
-      (title === "life" || description.includes("life adventure"))
-    ) {
-      return false;
-    }
-
-    const key = `${title}|${author}`;
-    if (!title || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function normalizeBookProgress(book) {
@@ -903,7 +980,14 @@ function normalizeBookProgress(book) {
       ? "finished"
       : "current";
 
-  return { ...book, currentPage, status };
+  return {
+    ...book,
+    currentPage,
+    status,
+    createdAt: book.createdAt || new Date().toISOString(),
+    rating: Number(book.rating) || 0,
+    review: book.review || ""
+  };
 }
 
 let books = loadBooks();
@@ -917,55 +1001,6 @@ function saveBooks() {
     STORAGE_KEY,
     JSON.stringify(books)
   );
-}
-
-async function saveNewBookToServer(book) {
-  const response = await fetch("/api/books", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      ...book,
-      pages: book.pages ?? book.totalPages
-    })
-  });
-
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) {
-    const isGitHubPages = location.hostname.endsWith(".github.io");
-    throw new Error(isGitHubPages
-      ? "Books cannot be saved on GitHub Pages because it only hosts the frontend. Run the Express server locally or deploy the backend."
-      : "The book API was not found. Restart the Express server with npm start, then open http://localhost:3000.");
-  }
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      result.error || "Could not save book to server."
-    );
-  }
-
-  return result;
-}
-
-async function updateBookOnServer(book, previousBook) {
-  const response = await fetch(`/api/books/${encodeURIComponent(book.id)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...book,
-      previousTitle: previousBook.title,
-      previousAuthor: previousBook.author
-    })
-  });
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) {
-    throw new Error("The book update API was not found. Restart the Express server with npm start.");
-  }
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "Could not update book on server.");
-  return result;
 }
 
 function getLocalDateString(date = new Date()) {
@@ -1359,6 +1394,9 @@ function getBookFromForm() {
       document.querySelector("#book-current-page").value
     );
 
+  const ratingValue = Number(document.querySelector("#book-rating").value || 0);
+  const reviewValue = String(document.querySelector("#book-review").value || "").trim();
+
   /*
      Make sure current page is valid.
   */
@@ -1371,7 +1409,7 @@ function getBookFromForm() {
     currentPage = pages;
   }
 
-
+  
   /*
      Automatically determine status
      based on reading progress.
@@ -1408,6 +1446,9 @@ function getBookFromForm() {
     currentPage,
 
     status,
+
+    rating: Number.isFinite(ratingValue) ? Math.max(0, Math.min(5, ratingValue)) : 0,
+    review: reviewValue,
 
     cover:
       document
@@ -1451,6 +1492,9 @@ function fillEditForm(book) {
 
   document.querySelector("#book-description").value =
     book.description || "";
+
+  document.querySelector("#book-rating").value = String(book.rating || 0);
+  document.querySelector("#book-review").value = book.review || "";
 
   const statusRadio =
     document.querySelector(
@@ -1513,6 +1557,15 @@ function createBookCover(book, className = "") {
   if (book.cover) {
     cover.style.backgroundImage =
       `url("${book.cover}")`;
+  } else {
+    cover.style.background = "linear-gradient(135deg, #5d3b25, #c79d64)";
+    cover.style.position = "relative";
+    cover.style.display = "grid";
+    cover.style.placeItems = "center";
+    cover.style.color = "#FAEFDD";
+    cover.style.fontWeight = "700";
+    cover.style.fontSize = "18px";
+    cover.textContent = "BOOK";
   }
 
   return cover;
@@ -1567,6 +1620,75 @@ function createEditButton(book) {
   return button;
 }
 
+function createDeleteButton(bookId) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.classList.add("delete-book-btn");
+  button.textContent = "Delete";
+  button.addEventListener("click", () => {
+    const index = books.findIndex(book => book.id === bookId);
+    if (index === -1) return;
+    books.splice(index, 1);
+    saveBooks();
+    renderBooks();
+  });
+  return button;
+}
+
+function createProgressControl(book) {
+  const wrapper = document.createElement("div");
+  wrapper.classList.add("mini-progress-control");
+
+  const label = document.createElement("label");
+  label.textContent = "Update progress";
+
+  const input = document.createElement("input");
+  input.type = "range";
+  input.min = "0";
+  input.max = String(book.pages || 1);
+  input.value = String(book.currentPage || 0);
+
+  const value = document.createElement("span");
+  value.textContent = `${book.currentPage || 0} / ${book.pages || 0}`;
+
+  input.addEventListener("input", () => {
+    const updated = Number(input.value);
+    value.textContent = `${updated} / ${book.pages || 0}`;
+  });
+
+  input.addEventListener("change", () => {
+    const current = Number(input.value);
+    const bookIndex = books.findIndex(item => item.id === book.id);
+    if (bookIndex === -1) return;
+    const previousPage = Number(books[bookIndex].currentPage || 0);
+    books[bookIndex].currentPage = Math.min(Math.max(current, 0), Number(book.pages || current));
+    books[bookIndex].status = books[bookIndex].currentPage === 0 ? "want" : books[bookIndex].currentPage >= Number(book.pages || books[bookIndex].currentPage) ? "finished" : "current";
+    saveBooks();
+    if (books[bookIndex].currentPage > previousPage) recordReadingActivity();
+    renderBooks();
+  });
+
+  wrapper.append(label, input, value);
+  return wrapper;
+}
+
+function createFinishButton(book) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.classList.add("mark-finished-btn");
+  button.textContent = book.status === "finished" ? "Completed" : "Mark as finished";
+  button.disabled = book.status === "finished";
+  button.addEventListener("click", () => {
+    const bookIndex = books.findIndex(item => item.id === book.id);
+    if (bookIndex === -1) return;
+    books[bookIndex].status = "finished";
+    books[bookIndex].currentPage = Number(books[bookIndex].pages || 0);
+    saveBooks();
+    renderBooks();
+  });
+  return button;
+}
+
 
 /* =================================
    BOOKSHELF
@@ -1587,12 +1709,11 @@ function navigateToBook(bookId) {
   showSection(destination.section);
   closeMobileMenu();
 
-  revealBookInSection(destination.section, bookId);
-
   const target = [...document.querySelectorAll(destination.selector)]
     .find(card => card.dataset.bookId === bookId);
   if (!target) return;
 
+  target.hidden = false;
   requestAnimationFrame(() => {
     target.scrollIntoView({ behavior: "smooth", block: "center" });
     target.classList.add("book-navigation-highlight");
@@ -1624,7 +1745,7 @@ function addBookToBookshelf(book) {
   });
 
   bookTile.dataset.genre =
-    book.genre;
+  book.genre;
 
   const cover =
     createBookCover(book);
@@ -1672,7 +1793,7 @@ function addBookToCurrentReads(book) {
   card.dataset.bookId = book.id;
 
   card.dataset.genre =
-    book.genre;
+  book.genre;
 
   const cover =
     createBookCover(
@@ -1717,6 +1838,8 @@ function addBookToCurrentReads(book) {
       "description"
     );
 
+  const ratingText = book.rating ? `Rating: ${book.rating}/5` : "No rating yet";
+  const rating = createTextElement("p", ratingText, "book-rating");
 
   /* ==============================
      READING PROGRESS
@@ -1746,7 +1869,7 @@ function addBookToCurrentReads(book) {
 
   const progressBar =
     document.createElement("span");
-
+  
   progressBar.style.width =
     `${percentage}%`;
 
@@ -1796,6 +1919,8 @@ function addBookToCurrentReads(book) {
   bookmarkArea.classList.add(
     "bookmark-area"
   );
+
+  const progressControl = createProgressControl(book);
 
 
   const bookmarkLabel =
@@ -1847,7 +1972,7 @@ function addBookToCurrentReads(book) {
 
   bookmarkButton.addEventListener(
     "click",
-    async () => {
+    () => {
 
       let newPage =
         Number(pageInput.value);
@@ -1920,13 +2045,6 @@ function addBookToCurrentReads(book) {
          re-render the library.
       */
 
-      try {
-        books[bookIndex] = await updateBookOnServer(books[bookIndex], books[bookIndex]);
-      } catch (error) {
-        console.error("Could not sync reading progress:", error);
-        alert(`Book progress was not saved to books.json: ${error.message}`);
-      }
-
       saveBooks();
 
       if (newPage > previousPage) recordReadingActivity();
@@ -1961,7 +2079,8 @@ function addBookToCurrentReads(book) {
 
   const editButton =
     createEditButton(book);
-
+  const deleteButton = createDeleteButton(book.id);
+  const finishButton = createFinishButton(book);
 
   /* ==============================
      BUILD CARD
@@ -1974,14 +2093,17 @@ function addBookToCurrentReads(book) {
   info.appendChild(genre);
 
   info.appendChild(description);
+  info.appendChild(rating);
 
   info.appendChild(progress);
 
   info.appendChild(progressLabels);
-
+  info.appendChild(progressControl);
   info.appendChild(bookmarkArea);
 
+  info.appendChild(finishButton);
   info.appendChild(editButton);
+  info.appendChild(deleteButton);
 
 
   card.appendChild(cover);
@@ -2008,7 +2130,7 @@ function addBookToWantList(book) {
   card.dataset.bookId = book.id;
 
   card.dataset.genre =
-    book.genre;
+  book.genre;
 
   const cover =
     createBookCover(
@@ -2053,13 +2175,19 @@ function addBookToWantList(book) {
 
   const editButton =
     createEditButton(book);
+  const deleteButton = createDeleteButton(book.id);
+  const progressControl = createProgressControl(book);
+  const finishButton = createFinishButton(book);
 
   info.appendChild(title);
   info.appendChild(author);
   info.appendChild(genre);
   info.appendChild(description);
   info.appendChild(pageCount);
+  info.appendChild(progressControl);
+  info.appendChild(finishButton);
   info.appendChild(editButton);
+  info.appendChild(deleteButton);
 
   card.appendChild(cover);
   card.appendChild(info);
@@ -2083,7 +2211,7 @@ function addBookToFinished(book) {
   card.dataset.bookId = book.id;
 
   card.dataset.genre =
-    book.genre;
+  book.genre;
 
   const cover =
     createBookCover(
@@ -2124,6 +2252,10 @@ function addBookToFinished(book) {
 
   const editButton =
     createEditButton(book);
+  const deleteButton = createDeleteButton(book.id);
+  const ratingText = book.rating ? `Rating: ${book.rating}/5` : "No rating yet";
+  const rating = createTextElement("p", ratingText, "book-rating");
+  const finishButton = createFinishButton(book);
 
   card.appendChild(cover);
   card.appendChild(title);
@@ -2131,7 +2263,10 @@ function addBookToFinished(book) {
   card.appendChild(genre);
   card.appendChild(pageCount);
   card.appendChild(description);
+  card.appendChild(rating);
+  card.appendChild(finishButton);
   card.appendChild(editButton);
+  card.appendChild(deleteButton);
 
   finishedList.appendChild(card);
 }
@@ -2312,33 +2447,37 @@ function updateBookCounts() {
 
   if (bookshelfCount) {
     bookshelfCount.textContent =
-      `${books.length} ${books.length === 1
-        ? "book"
-        : "books"
+      `${books.length} ${
+        books.length === 1
+          ? "book"
+          : "books"
       }`;
   }
 
   if (currentCount) {
     currentCount.textContent =
-      `${currentBooks.length} ${currentBooks.length === 1
-        ? "book"
-        : "books"
+      `${currentBooks.length} ${
+        currentBooks.length === 1
+          ? "book"
+          : "books"
       }`;
   }
 
   if (wantCount) {
     wantCount.textContent =
-      `${wantBooks.length} ${wantBooks.length === 1
-        ? "book"
-        : "books"
+      `${wantBooks.length} ${
+        wantBooks.length === 1
+          ? "book"
+          : "books"
       }`;
   }
 
   if (finishedCount) {
     finishedCount.textContent =
-      `${finishedBooks.length} ${finishedBooks.length === 1
-        ? "book"
-        : "books"
+      `${finishedBooks.length} ${
+        finishedBooks.length === 1
+          ? "book"
+          : "books"
       }`;
   }
 }
@@ -2360,51 +2499,43 @@ function updateDashboardStats() {
   const wantToReadStat =
     document.querySelector("#want-to-read-stat");
 
+  const totalPagesReadStat = document.querySelector("#total-pages-read-stat");
+  const favoriteGenreStat = document.querySelector("#favorite-genre-stat");
+  const booksPerMonthStat = document.querySelector("#books-per-month-stat");
+  const yearlyGoalBar = document.querySelector("#yearly-goal-bar");
+  const yearlyGoalStatus = document.querySelector("#yearly-goal-status");
 
-  const booksRead =
-    books.filter(
-      book => book.status === "finished"
-    ).length;
+  const booksRead = books.filter(book => book.status === "finished").length;
+  const totalBooks = books.length;
+  const currentReads = books.filter(book => book.status === "current").length;
+  const wantToRead = books.filter(book => book.status === "want").length;
+  const totalPagesRead = books.reduce((sum, book) => sum + Math.min(Number(book.currentPage || 0), Number(book.pages || 0)), 0);
 
+  const genreCounts = books.reduce((counts, book) => {
+    if (!book.genre) return counts;
+    counts[book.genre] = (counts[book.genre] || 0) + 1;
+    return counts;
+  }, {});
 
-  const totalBooks =
-    books.length;
+  const favoriteGenre = Object.entries(genreCounts).sort((a, b) => b[1] - a[1])[0];
+  const booksThisMonth = books.filter(book => {
+    if (!book.createdAt) return false;
+    const d = new Date(book.createdAt);
+    return d.getMonth() === new Date().getMonth() && d.getFullYear() === new Date().getFullYear();
+  }).length;
 
+  const yearlyGoalTarget = 52;
+  const yearlyProgress = Math.min(100, (booksRead / yearlyGoalTarget) * 100);
 
-  const currentReads =
-    books.filter(
-      book => book.status === "current"
-    ).length;
-
-
-  const wantToRead =
-    books.filter(
-      book => book.status === "want"
-    ).length;
-
-
-  if (booksReadStat) {
-    booksReadStat.textContent =
-      booksRead;
-  }
-
-
-  if (totalBooksStat) {
-    totalBooksStat.textContent =
-      totalBooks;
-  }
-
-
-  if (currentReadsStat) {
-    currentReadsStat.textContent =
-      currentReads;
-  }
-
-
-  if (wantToReadStat) {
-    wantToReadStat.textContent =
-      wantToRead;
-  }
+  if (booksReadStat) booksReadStat.textContent = booksRead;
+  if (totalBooksStat) totalBooksStat.textContent = totalBooks;
+  if (currentReadsStat) currentReadsStat.textContent = currentReads;
+  if (wantToReadStat) wantToReadStat.textContent = wantToRead;
+  if (totalPagesReadStat) totalPagesReadStat.textContent = totalPagesRead;
+  if (favoriteGenreStat) favoriteGenreStat.textContent = favoriteGenre ? favoriteGenre[0] : "—";
+  if (booksPerMonthStat) booksPerMonthStat.textContent = booksThisMonth;
+  if (yearlyGoalBar) yearlyGoalBar.style.width = `${yearlyProgress}%`;
+  if (yearlyGoalStatus) yearlyGoalStatus.textContent = `${booksRead} / ${yearlyGoalTarget} books completed`;
 }
 
 /* =================================
@@ -2416,82 +2547,30 @@ const genreFilters =
     ".genre-filter-select"
   );
 
-const sortOptions = [
-  ["title", "Title"],
-  ["author", "Author"],
-  ["recent", "Recently Added"],
-  ["progress", "Progress"]
-];
+const sortFilters = document.querySelectorAll(".sort-filter-select");
 
-document.querySelectorAll(".genre-filter").forEach(filterGroup => {
-  const section = filterGroup.querySelector("select")?.dataset.section;
-  if (!section) return;
-  const sortGroup = document.createElement("div");
-  sortGroup.className = "genre-filter sort-filter";
-  const label = document.createElement("label");
-  label.textContent = "Sort by";
-  label.htmlFor = `${section}-sort`;
-  const select = document.createElement("select");
-  select.id = `${section}-sort`;
-  select.className = "sort-books-select";
-  select.dataset.section = section;
-  sortOptions.forEach(([value, text]) => {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = text;
-    select.appendChild(option);
-  });
-  sortGroup.append(label, select);
-  filterGroup.parentElement.appendChild(sortGroup);
-  select.addEventListener("change", () => {
-    sortBooksInSection(section, select.value);
-    currentPages[section] = 1;
-    renderSection(section);
-  });
-});
+function getSortedBooks(list) {
+  const selected = document.querySelector("#bookshelf-sort-filter")?.value || "recent";
+  const sorted = [...list];
 
-function getSectionContainer(section) {
-  return {
-    bookshelf: bookshelfGrid,
-    current: readingList,
-    want: wantList,
-    finished: finishedList
-  }[section];
-}
-
-function compareBooks(a, b, sort) {
-  if (sort === "progress") {
-    const progress = book => Number(book.pages) > 0 ? Number(book.currentPage || 0) / Number(book.pages) : 0;
-    return progress(b) - progress(a);
+  switch (selected) {
+    case "title":
+      sorted.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+      break;
+    case "author":
+      sorted.sort((a, b) => (a.author || "").localeCompare(b.author || ""));
+      break;
+    case "progress":
+      sorted.sort((a, b) => Number(b.currentPage || 0) - Number(a.currentPage || 0));
+      break;
+    case "recent":
+    default:
+      sorted.sort((a, b) => Number(new Date(b.createdAt || 0)) - Number(new Date(a.createdAt || 0)));
+      break;
   }
-  if (sort === "recent") {
-    return String(b.createdAt || "").localeCompare(String(a.createdAt || "")) ||
-      String(b.id).localeCompare(String(a.id));
-  }
-  return String(a[sort] || "").localeCompare(String(b[sort] || ""), undefined, { sensitivity: "base" });
+
+  return sorted;
 }
-
-function sortBooksInSection(section, sort = "title") {
-  const container = getSectionContainer(section);
-  if (!container) return;
-  const sectionBooks = books
-    .filter(book => section === "bookshelf" ||
-      (section === "current" && book.status === "current") ||
-      (section === "want" && book.status === "want") ||
-      (section === "finished" && book.status === "finished"))
-    .sort((a, b) => compareBooks(a, b, sort));
-
-  sectionBooks.forEach(book => {
-    const card = container.querySelector(`[data-book-id="${CSS.escape(book.id)}"]`);
-    if (card) container.appendChild(card);
-  });
-
-  if (section === "bookshelf") {
-    const addTile = container.querySelector(".add-tile");
-    if (addTile) container.appendChild(addTile);
-  }
-}
-
 
 /* =================================
    GET AVAILABLE GENRES
@@ -2589,168 +2668,151 @@ function populateGenreFilters() {
   });
 }
 
+
 /* =================================
-   PAGINATION AND FILTER BOOKS BY GENRE
+   FILTER BOOKS BY GENRE
 ================================= */
 
-const PAGINATION_SECTIONS = {
-  bookshelf: { pageSize: 17, container: bookshelfGrid, itemSelector: ".book-tile:not(.add-tile)" },
-  current: { pageSize: 10, container: readingList, itemSelector: ".reading-card" },
-  want: { pageSize: 10, container: wantList, itemSelector: ".want-card" },
-  finished: { pageSize: 10, container: finishedList, itemSelector: ".finished-card" }
-};
+function filterBooksByGenre(
+  section,
+  genre
+) {
 
-const currentPages = { bookshelf: 1, current: 1, want: 1, finished: 1 };
+  /*
+     MY BOOKSHELF
+  */
 
-function getGenreSelect(sectionKey) {
-  return document.querySelector(`.genre-filter-select[data-section="${sectionKey}"]`);
+  if (section === "bookshelf") {
+
+    const bookTiles =
+      bookshelfGrid.querySelectorAll(
+        ".book-tile:not(.add-tile)"
+      );
+
+    bookTiles.forEach(tile => {
+
+      const bookGenre =
+        tile.dataset.genre;
+
+      tile.hidden =
+        genre !== "all" &&
+        bookGenre !== genre;
+
+    });
+
+  }
+
+
+  /*
+     CURRENT READS
+  */
+
+  if (section === "current") {
+
+    const cards =
+      readingList.querySelectorAll(
+        ".reading-card"
+      );
+
+    cards.forEach(card => {
+
+      const bookGenre =
+        card.dataset.genre;
+
+      card.hidden =
+        genre !== "all" &&
+        bookGenre !== genre;
+
+    });
+
+  }
+
+
+  /*
+     WANT TO READ
+  */
+
+  if (section === "want") {
+
+    const cards =
+      wantList.querySelectorAll(
+        ".want-card"
+      );
+
+    cards.forEach(card => {
+
+      const bookGenre =
+        card.dataset.genre;
+
+      card.hidden =
+        genre !== "all" &&
+        bookGenre !== genre;
+
+    });
+
+  }
+
+
+  /*
+     FINISHED BOOKS
+  */
+
+  if (section === "finished") {
+
+    const cards =
+      finishedList.querySelectorAll(
+        ".finished-card"
+      );
+
+    cards.forEach(card => {
+
+      const bookGenre =
+        card.dataset.genre;
+
+      card.hidden =
+        genre !== "all" &&
+        bookGenre !== genre;
+
+    });
+
+  }
 }
 
-Object.entries(PAGINATION_SECTIONS).forEach(([key, config]) => {
-  const emptyState = document.createElement("p");
-  emptyState.className = "genre-empty-state";
-  emptyState.textContent = "No books are saved in this genre yet.";
-  emptyState.hidden = true;
 
-  const footer = document.createElement("div");
-  footer.className = "pagination-footer";
-  footer.hidden = true;
-
-  const summary = document.createElement("p");
-  summary.className = "pagination-summary";
-
-  const nav = document.createElement("nav");
-  nav.className = "pagination";
-  nav.setAttribute("aria-label", "Pagination");
-
-  footer.append(summary, nav);
-  config.container.after(emptyState, footer);
-
-  Object.assign(config, { emptyState, footer, summary, nav });
-
-  nav.addEventListener("click", event => {
-    const button = event.target.closest("button[data-page]");
-    if (!button || button.disabled) return;
-    currentPages[key] = Number(button.dataset.page);
-    renderSection(key);
-    config.container.closest(".page")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-});
-
-function getPageNumbers(current, totalPages) {
-  const pages = new Set([1, totalPages, current - 1, current, current + 1]);
-  if (current <= 3) [2, 3, 4].forEach(p => pages.add(p));
-  if (current >= totalPages - 2) [totalPages - 1, totalPages - 2, totalPages - 3].forEach(p => pages.add(p));
-
-  const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
-  const result = [];
-  sorted.forEach((page, index) => {
-    if (index > 0 && page - sorted[index - 1] > 1) result.push("…");
-    result.push(page);
-  });
-  return result;
-}
-
-function createPageButton(label, page, { disabled = false, active = false, ariaLabel = "" } = {}) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "pagination-btn" + (active ? " active" : "");
-  button.textContent = label;
-  button.disabled = disabled;
-  if (!disabled) button.dataset.page = page;
-  if (active) button.setAttribute("aria-current", "page");
-  if (ariaLabel) button.setAttribute("aria-label", ariaLabel);
-  return button;
-}
-
-function renderPaginationControls(config, page, totalPages) {
-  config.nav.innerHTML = "";
-  config.nav.hidden = totalPages <= 1;
-  if (totalPages <= 1) return;
-
-  config.nav.appendChild(createPageButton("‹", page - 1, { disabled: page === 1, ariaLabel: "Previous page" }));
-
-  getPageNumbers(page, totalPages).forEach(item => {
-    if (item === "…") {
-      const gap = document.createElement("span");
-      gap.className = "pagination-ellipsis";
-      gap.textContent = "…";
-      config.nav.appendChild(gap);
-    } else {
-      config.nav.appendChild(createPageButton(item, item, { active: item === page, ariaLabel: `Page ${item}` }));
-    }
-  });
-
-  config.nav.appendChild(createPageButton("›", page + 1, { disabled: page === totalPages, ariaLabel: "Next page" }));
-}
-
-function renderSection(key) {
-  const config = PAGINATION_SECTIONS[key];
-  const genre = getGenreSelect(key)?.value || "all";
-
-  const items = [...config.container.querySelectorAll(config.itemSelector)];
-  const matching = items.filter(item => genre === "all" || item.dataset.genre === genre);
-
-  const total = matching.length;
-  const totalPages = Math.max(1, Math.ceil(total / config.pageSize));
-  const page = Math.min(Math.max(currentPages[key], 1), totalPages);
-  currentPages[key] = page;
-
-  const start = (page - 1) * config.pageSize;
-  const end = Math.min(start + config.pageSize, total);
-  const visibleItems = new Set(matching.slice(start, end));
-  items.forEach(item => { item.hidden = !visibleItems.has(item); });
-
-  config.emptyState.hidden = !(total === 0 && genre !== "all");
-  config.footer.hidden = total === 0;
-  if (total === 0) return;
-
-  config.summary.textContent = `Showing ${start + 1}–${end} of ${total} ${total === 1 ? "book" : "books"}`;
-  renderPaginationControls(config, page, totalPages);
-}
-
-function renderAllSections() {
-  Object.keys(PAGINATION_SECTIONS).forEach(renderSection);
-}
-
-function revealBookInSection(key, bookId) {
-  const config = PAGINATION_SECTIONS[key];
-  if (!config) return;
-
-  const select = getGenreSelect(key);
-  const items = [...config.container.querySelectorAll(config.itemSelector)];
-  const target = items.find(item => item.dataset.bookId === bookId);
-  if (!target) return;
-
-  if (select && select.value !== "all" && target.dataset.genre !== select.value) select.value = "all";
-
-  const genre = select?.value || "all";
-  const matching = items.filter(item => genre === "all" || item.dataset.genre === genre);
-  currentPages[key] = Math.floor(matching.indexOf(target) / config.pageSize) + 1;
-  renderSection(key);
-}
+/* =================================
+   FILTER CHANGE EVENT
+================================= */
 
 genreFilters.forEach(select => {
+
+  select.addEventListener(
+    "change",
+    () => {
+
+      filterBooksByGenre(
+        select.dataset.section,
+        select.value
+      );
+
+    }
+  );
+
+});
+
+sortFilters.forEach(select => {
   select.addEventListener("change", () => {
-    currentPages[select.dataset.section] = 1;
-    renderSection(select.dataset.section);
+    renderBooks();
   });
 });
 
 /* =================================
-  RENDER ALL BOOKS
+   RENDER ALL BOOKS
 ================================= */
 
 function renderBooks() {
 
-  const uniqueBooks = deduplicateBooks(books.map(normalizeBookProgress));
-  if (uniqueBooks.length !== books.length) {
-    books = uniqueBooks;
-    saveBooks();
-  }
-
   /*
-    Remove generated bookshelf books
+     Remove generated bookshelf books
   */
 
   bookshelfGrid
@@ -2763,7 +2825,7 @@ function renderBooks() {
 
 
   /*
-    Clear status sections
+     Clear status sections
   */
 
   readingList.innerHTML = "";
@@ -2772,18 +2834,20 @@ function renderBooks() {
 
 
   /*
-    Render every book
-    into My Bookshelf
+     Render every book
+     into My Bookshelf
   */
 
-  books.forEach(book => {
+  const visibleBooks = getSortedBooks(books);
+
+  visibleBooks.forEach(book => {
     addBookToBookshelf(book);
   });
 
 
   /*
-    Render books according
-    to their current status
+     Render books according
+     to their current status
   */
 
   books.forEach(book => {
@@ -2808,25 +2872,28 @@ function renderBooks() {
 
 
   /*
-    Update counts once
+     Update counts once
   */
 
   updateBookCounts();
   updateDashboardStats();
   populateGenreFilters();
 
-  document.querySelectorAll(".sort-books-select").forEach(select => {
-    sortBooksInSection(select.dataset.section, select.value);
+  genreFilters.forEach(select => {
+
+    filterBooksByGenre(
+      select.dataset.section,
+      select.value
+    );
+
   });
 
-  renderAllSections();
-
   /*
-    Pick a random CURRENT book
-    for the dashboard.
+     Pick a random CURRENT book
+     for the dashboard.
 
-    This does NOT change the
-    book's actual status.
+     This does NOT change the
+     book's actual status.
   */
 
   const currentBooks =
@@ -2838,10 +2905,10 @@ function renderBooks() {
 
     const randomBook =
       currentBooks[
-      Math.floor(
-        Math.random() *
-        currentBooks.length
-      )
+        Math.floor(
+          Math.random() *
+          currentBooks.length
+        )
       ];
 
     showDashboardCurrentBook(
@@ -2856,55 +2923,95 @@ function renderBooks() {
    ADD / EDIT BOOK
 ================================= */
 
-addBookForm.addEventListener("submit", async event => {
-  event.preventDefault();
+addBookForm.addEventListener(
+  "submit",
+  event => {
 
-  const formBook = getBookFromForm();
+    event.preventDefault();
 
-  try {
-    /* EDIT EXISTING BOOK */
+    const formBook =
+      getBookFromForm();
+
+
+    /* =================================
+       EDIT EXISTING BOOK
+    ================================= */
+
     if (editingBookId) {
-      const bookIndex = books.findIndex(
-        book => book.id === editingBookId
-      );
+
+      const bookIndex =
+        books.findIndex(
+          book =>
+            book.id === editingBookId
+        );
 
       if (bookIndex !== -1) {
-        const previousBook = { ...books[bookIndex] };
+
+        /*
+           Preserve the original
+           "default: true" property.
+
+           Therefore, editing one of
+           the six original books still
+           saves it permanently.
+        */
+
         books[bookIndex] = {
           ...books[bookIndex],
           ...formBook
         };
-        books[bookIndex] = await updateBookOnServer(books[bookIndex], previousBook);
+
       }
+
     }
 
-    /* ADD NEW BOOK */
+
+    /* =================================
+       ADD NEW BOOK
+    ================================= */
+
     else {
-      const newBook = {
+
+      /*
+         IMPORTANT:
+         No "default: true" here.
+
+         This means newly added books
+         exist only for this session.
+      */
+
+      books.push({
         id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
         ...formBook
-      };
+      });
 
-      // Save to books.json through the server.
-      const savedBook = await saveNewBookToServer(newBook);
-
-      // Use the book returned by the server.
-      books.push(savedBook);
     }
 
+
+    /*
+       Only default/sample books
+       are saved to localStorage.
+    */
+
     saveBooks();
+
+
+    /*
+       Update the screen.
+    */
+
     renderBooks();
+
+
+    /*
+       Close the modal.
+    */
+
     closeAddBookForm();
 
-  } catch (error) {
-    console.error("Failed to save book:", error);
-
-    alert(
-      `Could not save book: ${error.message}`
-    );
   }
-});
+);
 
 /* =================================
    STAT CARD NAVIGATION
@@ -2968,21 +3075,6 @@ function renderSearchResults(books, target = searchResults) {
   books.forEach(book => {
     const result = document.createElement("article");
     result.className = "search-result-card";
-    result.setAttribute("role", "button");
-    result.tabIndex = 0;
-    const localBook = booksForNavigation(book);
-    const statusLabel = localBook
-      ? localBook.status === "current" ? "Currently Reading"
-        : localBook.status === "finished" ? "Finished Books" : "Want to Read"
-      : "Book details";
-    result.setAttribute("aria-label", `${book.title}. ${statusLabel}. Open book`);
-    result.addEventListener("click", () => openBookFromSearch(book));
-    result.addEventListener("keydown", event => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        openBookFromSearch(book);
-      }
-    });
 
     const cover = document.createElement("div");
     cover.className = "search-result-cover";
@@ -2994,7 +3086,7 @@ function renderSearchResults(books, target = searchResults) {
     const title = document.createElement("h3");
     title.textContent = book.title;
     const metadata = document.createElement("p");
-    metadata.textContent = [book.author, book.genre, statusLabel].filter(Boolean).join(" · ");
+    metadata.textContent = [book.author, book.genre].filter(Boolean).join(" · ");
 
     details.append(title, metadata);
     result.append(cover, details);
@@ -3003,24 +3095,6 @@ function renderSearchResults(books, target = searchResults) {
 
   if (target === mobileSearchResults) target.hidden = false;
   target.replaceChildren(fragment);
-}
-
-function booksForNavigation(book) {
-  return books.find(item => item.id === book.id) || books.find(item =>
-    String(item.title || "").trim().toLocaleLowerCase() === String(book.title || "").trim().toLocaleLowerCase() &&
-    String(item.author || "").trim().toLocaleLowerCase() === String(book.author || "").trim().toLocaleLowerCase()
-  );
-}
-
-function openBookFromSearch(book) {
-  const localBook = booksForNavigation(book);
-  if (!localBook) {
-    showSearchMessage("This book is not in your bookshelf yet.");
-    return;
-  }
-
-  if (searchOverlay.classList.contains("visible-page")) closeSearch();
-  navigateToBook(localBook.id);
 }
 
 async function searchBooks(query, target = searchResults) {
@@ -3114,4 +3188,296 @@ document.addEventListener("keydown", event => {
 renderBooks();
 loadStreak();
 loadAuthState();
+
+
+
+/* DARK MODE SETTING */
+const darkModeToggle = document.getElementById("dark-mode-toggle");
+
+if (darkModeToggle) {
+  const savedTheme = localStorage.getItem("bookworm-theme");
+
+  if (savedTheme === "dark") {
+    document.body.classList.add("dark-mode");
+  }
+
+  function updateDarkModeButton() {
+    const isDark = document.body.classList.contains("dark-mode");
+
+    darkModeToggle.querySelector("span").textContent = isDark ? "\u2600" : "\u263e";
+    darkModeToggle.setAttribute("aria-label", `Switch to ${isDark ? "light" : "dark"} mode`);
+    darkModeToggle.title = `Switch to ${isDark ? "light" : "dark"} mode`;
+    darkModeToggle.setAttribute("aria-pressed", String(isDark));
+  }
+
+  updateDarkModeButton();
+
+  darkModeToggle.addEventListener("click", function () {
+    const isDark = document.body.classList.toggle("dark-mode");
+
+    localStorage.setItem(
+      "bookworm-theme",
+      isDark ? "dark" : "light"
+    );
+
+    updateDarkModeButton();
+  });
+}
+// LOG OUT: OPEN THE LOGIN DIALOG
+document.addEventListener('click', function (event) {
+  const logoutButton = event.target.closest('#logout-btn');
+
+  if (!logoutButton) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+
+  const guestPage = document.getElementById('guest-page');
+  const appLayout = document.getElementById('app-layout');
+  const authOverlay = document.getElementById('auth-overlay');
+  const authForm = document.getElementById('auth-form');
+  const authStatus = document.getElementById('auth-status');
+  const authEmail = document.getElementById('auth-email');
+  const accountButton = document.getElementById('account-btn');
+
+  // Hide the dashboard and return to the guest page.
+  guestPage.hidden = false;
+  appLayout.hidden = true;
+
+  document.getElementById('profile-btn').hidden = true;
+  document.getElementById('search-btn').hidden = true;
+  document.body.classList.remove('is-authenticated');
+
+  // Close other overlays.
+  document.getElementById('search-overlay')
+    ?.classList.add('invisible-page');
+
+  document.querySelector('.modal-overlay')
+    ?.classList.add('invisible-page');
+
+  // Reset the login form.
+  authForm.reset();
+  authStatus.textContent = '';
+
+  document.getElementById('auth-title').textContent = 'Log in';
+  document.getElementById('auth-submit-btn').textContent = 'Log in';
+  document.getElementById('auth-name-group').hidden = true;
+  document.getElementById('auth-switch-prompt').textContent =
+    'Need an account?';
+  document.getElementById('auth-switch-btn').textContent = 'Create one';
+
+  accountButton.textContent = 'Log in';
+
+  // Force the login dialog to appear.
+  authOverlay.hidden = false;
+  authOverlay.classList.remove('invisible-page');
+  authOverlay.style.cssText += `
+    display: flex !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 99999 !important;
+    align-items: center !important;
+    justify-content: center !important;
+  `;
+
+  history.replaceState(
+    null,
+    '',
+    window.location.pathname + window.location.search
+  );
+
+  window.scrollTo(0, 0);
+  authEmail.focus();
+}, true);
+
+/*- GUEST ACCESS AND TIME-BASED GREETING */
+  
+    (() => {
+      const guestPage = document.getElementById('guest-page');
+      const appLayout = document.getElementById('app-layout');
+
+      const profileButton = document.getElementById('profile-btn');
+      const searchButton = document.getElementById('search-btn');
+
+      const authOverlay = document.getElementById('auth-overlay');
+      const authForm = document.getElementById('auth-form');
+      const authStatus = document.getElementById('auth-status');
+
+      const authName = document.getElementById('auth-name');
+      const authEmail = document.getElementById('auth-email');
+
+      const loginButton = document.getElementById('guest-login-btn');
+      const accountButton = document.getElementById('account-btn');
+      const closeAuthButton = document.getElementById('close-auth-btn');
+
+      const homeTitle = document.getElementById('home-title');
+
+      let loginSubmitted = false;
+
+      function greetingForNow() {
+        const hour = new Date().getHours();
+
+        if (hour < 12) {
+          return 'Good morning';
+        }
+
+        if (hour < 17) {
+          return 'Good afternoon';
+        }
+
+        return 'Good evening';
+      }
+
+      function getReaderName() {
+        const accountName = authenticatedUser?.name?.trim();
+        const profileName = document
+          .getElementById('profile-display-name')
+          ?.textContent
+          ?.trim();
+
+        const enteredName = authName?.value?.trim();
+        const email = authEmail?.value?.trim();
+
+        if (accountName) {
+          return accountName;
+        }
+
+        if (profileName && profileName.toLowerCase() !== 'reader') {
+          return profileName;
+        }
+
+        if (enteredName) {
+          return enteredName;
+        }
+
+        if (email && email.includes('@')) {
+          return email.split('@')[0];
+        }
+
+        return 'Reader';
+      }
+
+      function showAuthenticatedApp() {
+        guestPage.hidden = true;
+        appLayout.hidden = false;
+
+        profileButton.hidden = false;
+        searchButton.hidden = false;
+
+        homeTitle.textContent =
+          `${greetingForNow()}, ${getReaderName()}!`;
+
+        document.body.classList.add('is-authenticated');
+      }
+
+      function showGuestPage() {
+        guestPage.hidden = false;
+        appLayout.hidden = true;
+
+        profileButton.hidden = true;
+        searchButton.hidden = true;
+
+        document.body.classList.remove('is-authenticated');
+      }
+
+      // Start in guest mode.
+      showGuestPage();
+
+      // Open the existing login dialog.
+      loginButton?.addEventListener('click', () => {
+        openAuthDialog();
+      });
+
+      // Check whether submitting the login form closes the dialog.
+      authForm?.addEventListener('submit', () => {
+        loginSubmitted = true;
+
+        window.setTimeout(() => {
+          if (
+            loginSubmitted &&
+            authOverlay.classList.contains('invisible-page')
+          ) {
+            const status = authStatus?.textContent?.trim() || '';
+
+            if (!/invalid|incorrect|failed|error|required|unable/i.test(status)) {
+              showAuthenticatedApp();
+              loginSubmitted = false;
+            }
+          }
+        }, 250);
+      });
+
+      // Detect when the existing authentication script closes the dialog.
+      const authObserver = new MutationObserver(() => {
+        if (
+          loginSubmitted &&
+          authOverlay.classList.contains('invisible-page')
+        ) {
+          window.setTimeout(() => {
+            const status = authStatus?.textContent?.trim() || '';
+
+            if (
+              loginSubmitted &&
+              authOverlay.classList.contains('invisible-page') &&
+              !/invalid|incorrect|failed|error|required|unable/i.test(status)
+            ) {
+              showAuthenticatedApp();
+              loginSubmitted = false;
+            }
+          }, 100);
+        }
+      });
+
+      authObserver.observe(authOverlay, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+
+      // Closing the login dialog without submitting keeps the app hidden.
+      closeAuthButton?.addEventListener('click', () => {
+        loginSubmitted = false;
+      });
+
+      // LOG OUT AND RETURN TO THE HOMEPAGE
+      const logoutButton = document.getElementById('logout-btn');
+
+      logoutButton?.addEventListener('click', () => {
+        // Return to the guest homepage and hide the private app pages.
+        showGuestPage();
+
+        // Close login and search overlays.
+        authOverlay.classList.add('invisible-page');
+        document.getElementById('search-overlay')
+          ?.classList.add('invisible-page');
+
+        // Reset the login submission state and account button.
+        loginSubmitted = false;
+
+        if (accountButton) {
+          accountButton.textContent = 'Log in';
+        }
+
+        // Clear the URL hash and return to the top of the homepage.
+        history.replaceState(
+          null,
+          '',
+          window.location.pathname + window.location.search
+        );
+
+        window.scrollTo({
+          top: 0,
+          behavior: 'smooth'
+        });
+      });
+
+      // Update the greeting every minute.
+      window.setInterval(() => {
+        if (!appLayout.hidden) {
+          homeTitle.textContent =
+            `${greetingForNow()}, ${getReaderName()}!`;
+        }
+      }, 60000);
+    })();
+
 
